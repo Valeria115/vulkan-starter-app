@@ -48,6 +48,12 @@ FetchContent_Declare(
 	GIT_TAG v1.92.9
 )
 
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 1.0.1
+)
+
 find_package(Vulkan REQUIRED)
 
 set(GLFW_LIBRARY_TYPE STATIC)
@@ -60,6 +66,7 @@ FetchContent_MakeAvailable(
 	vk-bootstrap
 	VulkanMemoryAllocator
 	imgui
+	glm
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -67,6 +74,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	Vulkan::Vulkan
 	vk-bootstrap::vk-bootstrap
 	GPUOpen::VulkanMemoryAllocator
+	glm::glm
+)
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+	GLM_FORCE_DEPTH_ZERO_TO_ONE
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
@@ -105,6 +117,9 @@ if(GLSLC_FOUND)
 
 	# compile_shader(example.vert)
 	# compile_shader(example.frag)
+
+	compile_shader(tetra.vert)
+	compile_shader(tetra.frag)
 
 	add_custom_target(shaders DEPENDS ${_SHADER_BINARIES})
 	add_dependencies(${PROJECT_NAME} shaders)
