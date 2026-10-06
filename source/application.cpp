@@ -1,5 +1,6 @@
 #include "application.hpp"
- 
+
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -7,7 +8,7 @@
 #include <vector>
 
 #include <imgui.h>
- 
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -49,6 +50,13 @@ struct Scene {
 	glm::vec3 rotation_degrees{20.0f, 30.0f, 0.0f};
 	glm::vec3 scale{1.0f};
 	glm::vec3 tint{1.0f};
+
+    // параметры анимации
+    bool playing = true;
+    float speed = 1.0f;
+    float path_radius = 1.2f;
+    float path_height = 0.6f;
+    float spin_speed = 60.0f;
 };
 
 // 2. Геометрия: усеченный правильный тетраэдр
@@ -91,6 +99,10 @@ static_assert(indices_total == 60, "Truncated tetrahedron must have 20 triangles
 // 3. Глобальное состояние приложения
 Scene scene;
 glm::mat4 mvp(1.0f);
+
+double animation_time = 0.0;
+double last_time = -1.0;
+
 VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
 VkPipeline pipeline = VK_NULL_HANDLE;
 
@@ -365,6 +377,16 @@ void shutdown() {
 }
 
 void update([[maybe_unused]] double time) {
+    if (last_time < 0.0) {
+        last_time = time;
+    }
+
+    const double dt = std::fmin(time - last_time, 0.1);
+    last_time = time;
+    if (scene.playing) {
+        animation_time += dt * double(scene.speed);
+    }
+
 	ImGui::Begin("Truncated tetrahedron");
 
 	ImGui::SeparatorText("Projection");
@@ -385,8 +407,23 @@ void update([[maybe_unused]] double time) {
 	ImGui::SeparatorText("Color");
 	ImGui::ColorEdit3("Tint", &scene.tint.x);
 
-	if (ImGui::Button("Reset")) {
+    ImGui::SeparatorText("Animation");
+    if (ImGui::Button(scene.playing ? "Pause" : "Play")) {
+        scene.playing = !scene.playing;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Restart")) {
+        animation_time = 0.0;
+    }
+    ImGui::SliderFloat("Speed", &scene.speed, 0.0f, 5.0f);
+    ImGui::SliderFloat("Path radius", &scene.path_radius, 0.0f, 3.0f);
+    ImGui::SliderFloat("Path height", &scene.path_height, 0.0f, 2.0f);
+    ImGui::SliderFloat("Spin (deg/s)", &scene.spin_speed, 0.0f, 360.0f);
+
+    ImGui::Separator();
+	if (ImGui::Button("Reset all")) {
 		scene = Scene{};
+        animation_time = 0.0;
 	}
 
 	ImGui::End();
@@ -406,10 +443,19 @@ void update([[maybe_unused]] double time) {
 
 	const glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -scene.camera_distance));
 
+    const float t = float(animation_time);
+    const glm::vec3 path_offset(
+        scene.path_radius * std::sin(t),
+        scene.path_height * std::sin(2.0f * t),
+        0.5f * scene.path_radius * std::sin(3.0f * t)
+    );
+
+    const float spin = scene.spin_speed * t;
+    
 	// Сначала рястажение, потом повороты, сдвиг
-	glm::mat4 model = glm::translate(glm::mat4(1.0f), scene.position);
-	model = glm::rotate(model, glm::radians(scene.rotation_degrees.x), glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, glm::radians(scene.rotation_degrees.y), glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 model = glm::translate(glm::mat4(1.0f), scene.position + path_offset);
+    model = glm::rotate(model, glm::radians(scene.rotation_degrees.x + 0.5f * spin), glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, glm::radians(scene.rotation_degrees.y + spin), glm::vec3(0.0f, 1.0f, 0.0f));
     model = glm::rotate(model, glm::radians(scene.rotation_degrees.z), glm::vec3(0.0f, 0.0f, 1.0f));
     model = glm::scale(model, scene.scale);
 
